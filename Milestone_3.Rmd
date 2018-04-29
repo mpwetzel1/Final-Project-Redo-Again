@@ -1,0 +1,117 @@
+---
+title: "Milestone_3"
+author: "Martha Wetzel"
+date: "4/26/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+#Set up
+```{r}
+library(foreign)  
+library(tidyverse)
+library(haven)
+library("sas7bdat")
+library(ggplot2)
+library(kableExtra)
+library(dplyr)
+library(survey)
+library(srvyr)
+library(car)
+library(stargazer)
+load(file = "mydata.RData")
+
+
+```
+
+
+
+
+```{r} 
+
+# Refresh memory on data 
+glimpse(alldata)
+names(alldata)
+
+# Illustrate the data
+# split into two data sets 
+PreOptPDMP <- filter(select(alldata, alldata$PhysHealthBad), alldata$PostOptPDMP==1)
+PreOptPDMP <- as.numeric(PreOptPDMP$PhysHealthBad)
+PostOptPDMP <- filter(select(alldata, PhysHealthBad), alldata$PostOptPDMP==0)
+PostOptPDMP <- as.numeric(PostOptPDMP$PhysHealthBad)
+
+h1 <- hist(PreOptPDMP, col=rgb(1,0,0,0.5),xlim=c(0,30),  main="Days of Not Good Health", xlab="Days")
+h2 <- hist(PostOptPDMP, col=rgb(0,0,1,0.5), add=T)
+legend("topright", c("Pre PDMP", "Post PDMP"), col=c(rgb(1,0,0,0.5), rgb(0,0,1,0.5)), lwd=10)
+box()
+plot(h1,freq=FALSE)
+
+
+# Create density plot
+alldata <- alldata %>% mutate(PreOpt_Phys = if_else(PostOptPDMP==0, as.integer(PhysHealthBad), NA_integer_))
+alldata <- alldata %>% mutate(PostOpt_Phys = if_else(PostOptPDMP==1, PhysHealthBad, NA_real_))
+
+alldata <- alldata %>% mutate(OptPDMPLabel = if_else(PostOptPDMP==0, "No Optional PDMP", "Optional PDMP"))
+alldata <- alldata %>% mutate(MandPDMPLabel = if_else(PostMandPDMP==0, "No Mandatory PDMP", "Mandatory PDMP"))
+
+
+ggplot(alldata, aes(PhysHealthBad, fill = OptPDMPLabel)) + geom_density(alpha = 0.2)
+ggplot(alldata, aes(PhysHealthBad, fill = OptPDMPLabel)) + geom_histogram(alpha = 0.5, aes(y = ..density..), position = 'dodge') 
+
+ggplot(alldata, aes(PhysHealthBad, fill = MandPDMPLabel)) + geom_histogram(alpha = 0.5, aes(y = ..density..), position = 'dodge') + 
+  ggtitle("Physical Health Not Good By Mandatory PDMP Status") +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  labs(x = "Days", y = "Density", fill="PDMP Status")
+
+```
+
+
+```{r}
+
+# Set list of covariate names for regression 
+
+
+
+
+# Regressions
+
+
+PhysBad <- glm(alldata$BadPhys_Bin ~ PostOptPDMP + PostMandPDMP + GenHealthFac + MEDCOST_cln + Race_cln + FEMALE + Age  + 
+                 EDUCA_cln + SMOKE100_cln + year_char + Statecode,
+               data=alldata, family=binomial)
+
+PhysBad <- glm(alldata$BadPhys_Bin ~ PostOptPDMP + PostMandPDMP + GenHealthFac + year_char + Statecode,
+               data=alldata, family=binomial)
+
+summary(PhysBad)
+
+# get the odds ratios
+exp(coef(PhysBad))
+
+#employed
+emp_reg <- glm(alldata$Employed ~ PostOptPDMP+PostMandPDMP, data=alldata, family=binomial)
+summary(emp_reg)
+
+Limited <- glm(alldata$Limited_bin ~ PostOptPDMP + PostMandPDMP + GenHealthFac + MEDCOST_cln + Race_cln + FEMALE + Age  + 
+                 EDUCA_cln + SMOKE100_cln + year_char + Statecode,
+               data=alldata, family=binomial)
+summary(Limited)
+
+
+```
+
+
+```{r}
+
+residualPlots(PhysBad)
+```
+
+
+```{r}
+stargazer(prestige.mod1, prestige.mod2, title="Comparison of 2 Regression outputs",
+          type = "text", align=TRUE)
+```
