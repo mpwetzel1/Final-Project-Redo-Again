@@ -2,116 +2,209 @@
 title: "Milestone_3"
 author: "Martha Wetzel"
 date: "4/26/2018"
-output: html_document
+output:
+  word_document: default
+  html_document: default
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
-```
+knitr::opts_chunk$set(echo = FALSE)
 
 
-#Set up
-```{r}
-library(foreign)  
+#library(foreign)  
 library(tidyverse)
-library(haven)
+#library(haven)
 library("sas7bdat")
 library(ggplot2)
 library(kableExtra)
 library(dplyr)
-library(survey)
-library(srvyr)
+#library(survey)
+#library(srvyr)
 library(car)
 library(stargazer)
-load(file = "mydata.RData")
+library(broom)
+
+
+load(file = "mydata3.RData")
+
+```
+
+
+```{r missings}
+
+alldata$Complete <- (is.na(alldata$Employed) == F & is.na(alldata$DaysLimited) == F)
+alldata$Complete <- complete.cases(alldata)
 
 
 ```
 
 
+# Results
+## Descriptive Statistics
+
+The tables below provide descriptive statistics for key demographic variables.
+
+```{r descriptives} 
+
+# Create factor variable for policy type
+alldata <- alldata %>% mutate(CurrentPolicy = if_else(PostMandPDMP ==1, 3, 
+                                                                       if_else( PostOptPDMP == 1, 2, 1)))
+
+knitr::kable(x = table(alldata$FEMALE, alldata$CurrentPolicy),
+             col.names = c("No PDMP", "Optional PDMP", "Mandatory PDMP"),
+             caption = "Gender By PDMP Policy")
+
+# General Health
+
+knitr::kable(x = table(alldata$GenHealthFac, alldata$CurrentPolicy),
+             col.names = c("No PDMP", "Optional PDMP", "Mandatory PDMP"),
+             caption = "Health Status By PDMP Policy",
+             row.names = TRUE)
+
+# Education
+
+knitr::kable(x = table(alldata$EDUCA_cln, alldata$CurrentPolicy),
+             col.names = c("No PDMP", "Optional PDMP", "Mandatory PDMP"),
+             caption = "Education By PDMP Policy",
+             row.names = TRUE)
+
+# Employment
+
+knitr::kable(x = table(alldata$Employed, alldata$CurrentPolicy),
+             col.names = c("No PDMP", "Optional PDMP", "Mandatory PDMP"),
+             caption = "Employment By PDMP Policy",
+             row.names = TRUE)
 
 
-```{r} 
+```
 
-# Refresh memory on data 
-glimpse(alldata)
-names(alldata)
+The following figures illustrate the distribution of focal outcomes. Both the outcomes of days where physical health was not good and days where activity was limited due to poor health had a range of 0 - 30. Figures 1 and 2 show days of not good physical health. The distribution was similar between the optional and mandatory PDMPs. In both cases, the distribution was bimodal. Due to this distribution, outcomes were recoded as binary variables indicating the individual spent more than half of the preceeding 30 days in poor physical health.
 
-# Illustrate the data
-# split into two data sets 
-PreOptPDMP <- filter(select(alldata, alldata$PhysHealthBad), alldata$PostOptPDMP==1)
-PreOptPDMP <- as.numeric(PreOptPDMP$PhysHealthBad)
-PostOptPDMP <- filter(select(alldata, PhysHealthBad), alldata$PostOptPDMP==0)
-PostOptPDMP <- as.numeric(PostOptPDMP$PhysHealthBad)
-
-h1 <- hist(PreOptPDMP, col=rgb(1,0,0,0.5),xlim=c(0,30),  main="Days of Not Good Health", xlab="Days")
-h2 <- hist(PostOptPDMP, col=rgb(0,0,1,0.5), add=T)
-legend("topright", c("Pre PDMP", "Post PDMP"), col=c(rgb(1,0,0,0.5), rgb(0,0,1,0.5)), lwd=10)
-box()
-plot(h1,freq=FALSE)
-
-
-# Create density plot
-alldata <- alldata %>% mutate(PreOpt_Phys = if_else(PostOptPDMP==0, as.integer(PhysHealthBad), NA_integer_))
-alldata <- alldata %>% mutate(PostOpt_Phys = if_else(PostOptPDMP==1, PhysHealthBad, NA_real_))
+```{r histogramsphy}
+# Illustrate the outcomes
 
 alldata <- alldata %>% mutate(OptPDMPLabel = if_else(PostOptPDMP==0, "No Optional PDMP", "Optional PDMP"))
 alldata <- alldata %>% mutate(MandPDMPLabel = if_else(PostMandPDMP==0, "No Mandatory PDMP", "Mandatory PDMP"))
 
+# Physical Health not good
+# Optional PDMP Distribution
+ggplot(alldata, aes(PhysHealthBad, fill = OptPDMPLabel)) + geom_histogram(alpha = 0.5, aes(y = ..density..), position = 'dodge') + 
+  ggtitle("Poor Physical Health \n By Optional PDMP Status") +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  labs(x = "Days", y = "Density", fill="PDMP Status")
 
-ggplot(alldata, aes(PhysHealthBad, fill = OptPDMPLabel)) + geom_density(alpha = 0.2)
-ggplot(alldata, aes(PhysHealthBad, fill = OptPDMPLabel)) + geom_histogram(alpha = 0.5, aes(y = ..density..), position = 'dodge') 
-
+# Mandatory PMDP Distribution
 ggplot(alldata, aes(PhysHealthBad, fill = MandPDMPLabel)) + geom_histogram(alpha = 0.5, aes(y = ..density..), position = 'dodge') + 
-  ggtitle("Physical Health Not Good By Mandatory PDMP Status") +
+  ggtitle("Poor Physical Health \n By Mandatory PDMP Status") +
   theme(plot.title = element_text(hjust = 0.5)) +
   labs(x = "Days", y = "Density", fill="PDMP Status")
 
 ```
 
+Similar to the days of poor physical health, the days of activity limitations outcome also showed a bimodal distribution. There was a small difference visible for the mandatory vs. not mandatory PDMP distribution, but overall the distributions were very similar. This variable was also recoded to be a binary indicator representing individuals who reported having activity limitations for more than half the days of the month.
+
+
+```{r histogramslim}
+# Days Limited
+# Optional PDMP Distribution
+ggplot(alldata, aes(DaysLimited, fill = OptPDMPLabel)) + geom_histogram(alpha = 0.5, aes(y = ..density..), position = 'dodge') + 
+  ggtitle("Days of Activity Limitations \n By Optional PDMP Status") +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  labs(x = "Days", y = "Density", fill="PDMP Status")
+
+# Optional PDMP Distribution
+ggplot(alldata, aes(DaysLimited, fill = MandPDMPLabel)) + geom_histogram(alpha = 0.5, aes(y = ..density..), position = 'dodge') + 
+  ggtitle("Days of Activity Limitations \n By Mandatory PDMP Status") +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  labs(x = "Days", y = "Density", fill="PDMP Status")
+```
+
+## Regression Results
+
 
 ```{r}
 
-# Set list of covariate names for regression 
 
+# Start with employment, most straight forward for replication
 
+Emp_reg <- glm(alldata$Employed ~ PostOptPDMP + PostMandPDMP + GenHealthFac + MEDCOST_cln + Race_cln +
+                      FEMALE + Age  +  EDUCA_cln + SMOKE100_cln + year_char + Statecode,
+               data=alldata, family=binomial)
 
+# Get odds ratios and transform SE 
+Emp_reg_df <- tidy(Emp_reg)
 
-# Regressions
+# this is being done the long way because mutate seems to be broken 
+Emp_reg_df$or <- exp(Emp_reg_df$estimate)
+Emp_reg_df$var_diag <- diag(vcov(Emp_reg))
+Emp_reg_df$or_se <- sqrt(Emp_reg_df$or^2 * Emp_reg_df$var_diag)
+Emp_reg_df$stars <-  if_else(Emp_reg_df$p.value < 0.01, "***", 
+                          if_else (Emp_reg_df$p.value < 0.05, "**",
+                          if_else(Emp_reg_df$p.value < 0.1, "*", " ") )) # Add stars by hand
 
+# Clean it up for printing
+Emp_reg_df2 <- select(Emp_reg_df, term, or, or_se, stars)
+Emp_reg_df2$or <- round(Emp_reg_df2$or, 3)
+Emp_reg_df2$or_se <- round(Emp_reg_df2$or_se, 3)
+Emp_reg_df2
 
-PhysBad <- glm(alldata$BadPhys_Bin ~ PostOptPDMP + PostMandPDMP + GenHealthFac + MEDCOST_cln + Race_cln + FEMALE + Age  + 
+```
+
+```{r physhealthreg}
+# Physical Health Bad More Than Half the Month
+
+PhysBad <- glm(alldata$BadPhys_Bin ~ PostOptPDMP + PostMandPDMP + GenHealthFac + MEDCOST_cln + Race_cln + FEMALE
+               + Age  + 
                  EDUCA_cln + SMOKE100_cln + year_char + Statecode,
                data=alldata, family=binomial)
 
-PhysBad <- glm(alldata$BadPhys_Bin ~ PostOptPDMP + PostMandPDMP + GenHealthFac + year_char + Statecode,
+
+# Get odds ratios and transform SE 
+PhysBad_df <- tidy(PhysBad)
+
+# this is being done the long way because mutate seems to be broken 
+PhysBad_df$or <- exp(PhysBad_df$estimate)
+PhysBad_df$var_diag <- diag(vcov(PhysBad))
+PhysBad_df$or_se <- sqrt(PhysBad_df$or^2 * PhysBad_df$var_diag)
+PhysBad_df$stars <-  if_else(PhysBad_df$p.value < 0.01, "***", 
+                          if_else (PhysBad_df$p.value < 0.05, "**",
+                          if_else(PhysBad_df$p.value < 0.1, "*", " ") )) # Add stars by hand
+
+# Clean it up for printing
+PhysBad_df2 <- select(PhysBad_df, term, or, or_se, stars)
+PhysBad_df2$or <- round(PhysBad_df2$or, 3)
+PhysBad_df2$or_se <- round(PhysBad_df2$or_se, 3)
+PhysBad_df2
+```
+
+```{r limitreg}
+# Days Limited
+Limited <- glm(alldata$Limited_bin ~ PostOptPDMP + PostMandPDMP + GenHealthFac + MEDCOST_cln + Race_cln + FEMALE
+               + Age  +  EDUCA_cln + SMOKE100_cln + year_char + Statecode,
                data=alldata, family=binomial)
 
-summary(PhysBad)
 
-# get the odds ratios
-exp(coef(PhysBad))
-
-#employed
-emp_reg <- glm(alldata$Employed ~ PostOptPDMP+PostMandPDMP, data=alldata, family=binomial)
-summary(emp_reg)
-
-Limited <- glm(alldata$Limited_bin ~ PostOptPDMP + PostMandPDMP + GenHealthFac + MEDCOST_cln + Race_cln + FEMALE + Age  + 
-                 EDUCA_cln + SMOKE100_cln + year_char + Statecode,
-               data=alldata, family=binomial)
-summary(Limited)
+models <- list(PhysBad, Limited)
 
 
+# Get odds ratios and transform SE 
+PhysBad_df <- tidy(PhysBad)
+
+# this is being done the long way because mutate seems to be broken 
+PhysBad_df$or <- exp(PhysBad_df$estimate)
+PhysBad_df$var_diag <- diag(vcov(PhysBad))
+PhysBad_df$or_se <- sqrt(PhysBad_df$or^2 * PhysBad_df$var_diag)
+PhysBad_df$stars <-  if_else(PhysBad_df$p.value < 0.01, "***", 
+                          if_else (PhysBad_df$p.value < 0.05, "**",
+                          if_else(PhysBad_df$p.value < 0.1, "*", " ") )) # Add stars by hand
+
+# Clean it up for printing
+PhysBad_df2 <- select(PhysBad_df, term, or, or_se, stars)
+PhysBad_df2$or <- round(PhysBad_df2$or, 3)
+PhysBad_df2$or_se <- round(PhysBad_df2$or_se, 3)
+PhysBad_df2
 ```
 
 
-```{r}
-
-residualPlots(PhysBad)
-```
 
 
-```{r}
-stargazer(prestige.mod1, prestige.mod2, title="Comparison of 2 Regression outputs",
-          type = "text", align=TRUE)
-```
